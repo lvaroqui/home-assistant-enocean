@@ -40,12 +40,29 @@ fi
 git fetch "$REMOTE_NAME"
 git checkout FETCH_HEAD
 git checkout "$GIT_REF"
+python -m script.translations develop --integration "$INTEGRATION"
 
 cd "$ROOT_DIR"
 
 # Copy the integration
 SRC_PATH="$HA_DIR/homeassistant/components/$INTEGRATION"
 DEST_PATH="custom_components/$INTEGRATION"
+MANIFEST_FILE="$DEST_PATH/manifest.json"
+current_version="1.0.0"
+
+if [ -f "$MANIFEST_FILE" ] && command -v jq >/dev/null 2>&1; then
+	manifest_version=$(jq -r '.version // empty' "$MANIFEST_FILE")
+	if [ -n "$manifest_version" ]; then
+		current_version="$manifest_version"
+	fi
+fi
+
+major=$(printf '%s' "$current_version" | cut -d. -f1)
+if [ -z "$major" ]; then
+	major=1
+fi
+new_major=$((major + 1))
+new_version="$new_major.0.0"
 
 if [ ! -d "$SRC_PATH" ]; then
 	echo "Integration '$INTEGRATION' not found in source repository."
@@ -58,13 +75,14 @@ cp -r "$SRC_PATH" "$DEST_PATH"
 
 echo "Import complete."
 
-MANIFEST_FILE="$DEST_PATH/manifest.json"
 if [ -f "$MANIFEST_FILE" ]; then
 	if command -v jq >/dev/null 2>&1; then
 		tmpfile=$(mktemp)
-		jq '.version = "1.0.0"' "$MANIFEST_FILE" > "$tmpfile" && mv "$tmpfile" "$MANIFEST_FILE"
-		echo "Set version to 1.0.0 in $MANIFEST_FILE using jq."
+		jq --arg version "$new_version" '.version = $version' "$MANIFEST_FILE" > "$tmpfile" && mv "$tmpfile" "$MANIFEST_FILE"
+		echo "Set version to $new_version in $MANIFEST_FILE using jq."
 	else
 		echo "jq not found, skipping version update in $MANIFEST_FILE."
 	fi
+else
+	echo "Manifest not found, default version is 1.0.0."
 fi
