@@ -71,32 +71,6 @@ class EnOceanEntity(Entity):
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
 
-        # If the device has a valid address and EEP, register it with the gateway so it can receive messages.
-        if self.eep is not None:
-            self.async_on_remove(
-                async_dispatcher_connect(
-                    self.hass,
-                    SIGNAL_ADDED_TO_GATEWAY,
-                    self._added_to_gateway,
-                )
-            )
-
-            dispatcher_send(
-                self.hass, SIGNAL_ADD_DEVICE, self.address, self.eep, self.sender_id
-            )
-
-            self.async_on_remove(
-                async_dispatcher_connect(
-                    self.hass,
-                    SIGNAL_RECEIVE_OBSERVATION,
-                    self._observation_received_callback,
-                )
-            )
-
-            self.async_on_remove(
-                lambda: dispatcher_send(self.hass, SIGNAL_REMOVE_DEVICE, self.address)
-            )
-
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -112,6 +86,32 @@ class EnOceanEntity(Entity):
                 self._erp1_telegram_received_callback,
             )
         )
+
+        # If the device has a valid address and EEP, register it with the gateway so it can receive messages.
+        if self.eep is not None:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    SIGNAL_ADDED_TO_GATEWAY,
+                    self._added_to_gateway,
+                )
+            )
+
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    SIGNAL_RECEIVE_OBSERVATION,
+                    self._observation_received_callback,
+                )
+            )
+
+            self.async_on_remove(
+                lambda: dispatcher_send(self.hass, SIGNAL_REMOVE_DEVICE, self.address)
+            )
+
+            dispatcher_send(
+                self.hass, SIGNAL_ADD_DEVICE, self.address, self.eep, self.sender_id
+            )
 
     def _observation_received_callback(self, observation: Observation) -> None:
         """Handle incoming observations."""

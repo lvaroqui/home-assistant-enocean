@@ -191,50 +191,32 @@ class EnOceanCover(EnOceanEntity, CoverEntity):
             self._attr_current_cover_position = 100 - percent
             schedule_update = True
 
-        if not self.requested_position and Observable.COVER_STATE in observation.values:
-            # If we don't have a requested position, use cover state from the
-            # message
-            #
-            # Currently, when the cover starts moving, we receive a stopped
-            # state, followed by an opening/closing state, which causes the UI
-            # to briefly show "stopped" before updating to the correct state. To
-            # work around this, we prioritize the cover state from the message
-            # only if we don't have a requested position.
-            #
-            # Only exception is if the observation source is a timer (from the
-            # watchdog), in which case the cover stopped from external control
-            # (eg. physical switch, obstacle).
-            self.requested_position = None
+        if self._attr_current_cover_position is not None:
+            if self.requested_position is not None:
+                # Assume movement has stopped if we receive a position matching the
+                # requested position
+                current_position = 100 - self._attr_current_cover_position
 
-            state = observation.values[Observable.COVER_STATE]
-            if state == "closed":
-                self._attr_is_closed = True
+                if current_position == self.requested_position:
+                    self.requested_position = None
+                    self._attr_is_closing = False
+                    self._attr_is_opening = False
+                    self.hass.loop.call_soon_threadsafe(self._cancel_watchdog)
+
+                schedule_update = True
             else:
-                self._attr_is_closed = False
-
-            if state == "opening":
-                self._attr_is_opening = True
-                self._attr_is_closing = False
-            elif state == "closing":
-                self._attr_is_opening = False
-                self._attr_is_closing = True
-            else:
-                self._attr_is_opening = False
-                self._attr_is_closing = False
-
-            schedule_update = True
-        elif self._attr_current_cover_position is not None:
-            # Assume movement has stopped if we receive a position matching the
-            # requested position
-            current_position = 100 - self._attr_current_cover_position
-
-            if current_position == self.requested_position:
-                self.requested_position = None
-                self._attr_is_closing = False
-                self._attr_is_opening = False
-                self.hass.loop.call_soon_threadsafe(self._cancel_watchdog)
-
-            schedule_update = True
+                if self._attr_current_cover_position == 0:
+                    self._attr_is_closing = False
+                    self._attr_is_opening = False
+                    self._attr_is_closed = True
+                elif self._attr_current_cover_position == 100:
+                    self._attr_is_closing = False
+                    self._attr_is_opening = False
+                    self._attr_is_closed = False
+                else:
+                    # We don't know if the cover is opening or closing, but we know it's not fully open or closed
+                    self._attr_is_closed = False
+                schedule_update = True
 
         if schedule_update:
             self.schedule_update_ha_state()
